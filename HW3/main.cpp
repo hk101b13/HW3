@@ -1,6 +1,7 @@
 #include "mbed.h"
 #include "mbed_rpc.h"
 #include <math.h>
+#include "uLCD_4DGL.h"
 
 #include "accelerometer_handler.h"
 #include "config.h"
@@ -18,29 +19,28 @@
 #include "MQTTmbed.h"
 #include "MQTTClient.h"
 #include "stm32l475e_iot01_accelero.h"
-#define PI 3.141592965
 
+#define PI 3.141592965
+Config config;
+
+//-----------------------------------------------------------------------------------------------------------
 // MQTT
 WiFiInterface *wifi;
 volatile int message_num = 0;
 volatile int arrivedcount = 0;
-volatile bool closed = false;\
+volatile bool closed = false;
 const char* topic = "Mbed";
 Thread mqtt_thread(osPriorityHigh);
 EventQueue mqtt_queue;
 
 BufferedSerial pc(USBTX, USBRX);
 void LEDControl(Arguments *in, Reply *out);
-RPCFunction rpcGesture(&gesture_ui, "gesture_UI");
-RPCFunction rpcTilt(&tilt_ang_det, "tilt_angel")
 
 DigitalOut led1(LED1);
 InterruptIn sw1(USER_BUTTON);
 EventQueue queue(32 * EVENTS_EVENT_SIZE);
 
-int16_t pDataXYZ[3] = {0};
-int16_t g[3] = {0, 0 ,100};/
-int16_t s[3] = {0}  
+uLCD_4DGL uLCD(D1, D0, D2); // serial tx, serial rx, reset pin;
 
 Thread t;
 int threshold = 30;
@@ -48,38 +48,122 @@ double angel;
 double length_v;
 double length_g;
 double sum;
-  // Whether we should clear the buffer next time we fetch data
-  bool should_clear_buffer = false;
-  bool got_data = false;
+// Whether we should clear the buffer next time we fetch data
+bool should_clear_buffer = false;
+bool got_data = false;
 
-  // The gesture index of the prediction
-  int gesture_index;
+// The gesture index of the prediction
+int gesture_index;
 
-// Create an area of memory to use for input, output, and intermediate arrays.
-// The size of this will depend on the model you're using, and may need to be
-// determined by experimentation.
+Ticker flipper;
+
 constexpr int kTensorArenaSize = 60 * 1024;
 uint8_t tensor_arena[kTensorArenaSize];
+MQTT::Client<MQTTNetwork, Countdown> * client_out;
+int WIFI_FUNCTION();
+
+int machine_learning();
+void tilt_ang_det(int threshold);
+RPCFunction rpcGesture(&machine_learning, "gesture_UI");
+RPCFunction rpcTilt(&tilt_ang_det, "tilt_angel");
 
 
+void publish_message();
+
+
+//---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+int WIFI_FUNCTION(){
+   
+    wifi = WiFiInterface::get_default_instance();
+    if (!wifi) {
+            printf("ERROR: No WiFiInterface found.\r\n");
+            return -1;
+    }
+
+
+    printf("\nConnecting to %s...\r\n", MBED_CONF_APP_WIFI_SSID);
+    int ret = wifi->connect(MBED_CONF_APP_WIFI_SSID, MBED_CONF_APP_WIFI_PASSWORD, NSAPI_SECURITY_WPA_WPA2);
+    if (ret != 0) {
+            printf("\nConnection error: %d\r\n", ret);
+            return -1;
+    }
+
+
+    NetworkInterface* net = wifi;
+    MQTTNetwork mqttNetwork(net);
+    MQTT::Client<MQTTNetwork, Countdown> client(mqttNetwork);
+
+    //TODO: revise host to your IP
+    const char* host = "192.168.105.51";
+    printf("Connecting to TCP network...\r\n");
+
+    SocketAddress sockAddr;
+    sockAddr.set_ip_address(host);
+    sockAddr.set_port(1883);
+
+    printf("address is %s/%d\r\n", (sockAddr.get_ip_address() ? sockAddr.get_ip_address() : "None"),  (sockAddr.get_port() ? sockAddr.get_port() : 0) ); //check setting
+
+    int rc = mqttNetwork.connect(sockAddr);//(host, 1883);
+    if (rc != 0) {
+            printf("Connection error.");
+            return -1;
+    }
+    printf("Successfully connected!\r\n");
+
+    MQTTPacket_connectData data = MQTTPacket_connectData_initializer;
+    data.MQTTVersion = 3;
+    data.clientID.cstring = "Mbed";
+
+    if ((rc = client.connect(data)) != 0){
+            printf("Fail to connect MQTT\r\n");
+    }
+
+    mqtt_thread.start(callback(&mqtt_queue, &EventQueue::dispatch_forever));
+    // flipper.attach(mqtt_queue.event(&publish_message, &client), 1500ms);
+
+    int num = 0;
+    while (num != 5) {
+            client.yield(100);
+            ++num;
+    }
+
+    while (1) {
+            if (closed) break;
+            client.yield(500);
+            ThisThread::sleep_for(500ms);
+    }
+
+    printf("Ready to close MQTT Network......\n");
+
+    if ((rc = client.unsubscribe(topic)) != 0) {
+            printf("Failed: rc from unsubscribe was %d\n", rc);
+    }
+    if ((rc = client.disconnect()) != 0) {
+    printf("Failed: rc from disconnect was %d\n", rc);
+    }
+
+    mqttNetwork.disconnect();
+    printf("Successfully closed!\n");
+    client_out  =  &client;
+    return 0;
+}
 //--------------------------------------------------------------------------------------------------------------------------------------------------
-void mqtt_publish(MQTT::Client<MQTTNetwork, Countdown>* client){
+void publish_message(){
     led1=1;
     message_num++;
     MQTT::Message message;
     char buff[100];
-    sprintf(int,threshold);
+    sprintf(buff, "%d", threshold);
     message.qos = MQTT::QOS0;
     message.retained = false;
     message.dup = false;
     message.payload = (void*) buff;
     message.payloadlen = strlen(buff) + 1;
-    int rc = client->publish(topic, message);
+    int rc = client_out->publish(topic, message);
 
     printf("rc:  %d\r\n", rc);
     printf( buff);
     led1=0;
-    mqttNetwork.disconnect();
 }
 
 //---------------------------------------------------------------------------------------------------------------------------------------------------
@@ -88,10 +172,12 @@ void close_mqtt() {
 }
 
 //--------------------------------------------------------------------------------------------------------------------------------------------------------
-count_theda(){
-    BSP_ACCELERO_Init();
+int count_theda(){
+    int16_t pDataXYZ[3] = {0};
+    int16_t g[3] = {0, 0 ,100};
+    int16_t s[3] = {0};
     BSP_ACCELERO_AccGetXYZ(pDataXYZ);
-    for (i=0; i<3; i++){
+    for (int i=0; i<3; i++){
         s[i] =pDataXYZ[i]*g[i];
     }
     for(int i = 0; i<3; i++){
@@ -148,7 +234,7 @@ int PredictGesture(float* output) {
 
 
 //--------------------------------------------------------------------------------------------------------------------------------------------------------
-machine_learning(int argc, char* argv[]){
+int machine_learning(){
 
   // Set up logging.
   static tflite::MicroErrorReporter micro_error_reporter;
@@ -212,8 +298,9 @@ machine_learning(int argc, char* argv[]){
   }
 
   error_reporter->Report("Set up successful...\n");
-
   while (true) {
+
+    // if(MODE == 1) return 0
 
     // Attempt to read new data from the accelerometer
     got_data = ReadAccelerometer(error_reporter, model_input->data.f,
@@ -243,51 +330,63 @@ machine_learning(int argc, char* argv[]){
     if (gesture_index < label_num) {
       error_reporter->Report(config.output_message[gesture_index]);
     }
-  }
-  return gesture_index;
-}
-
-//---------------------------------------------------------------------------------------------------------------------------------------------------
-gesture_UI (){
-    machine_learning();
-    if(gesture_index == 0){
+      
+    if(gesture_index == 1){
         threshold=threshold+5;
         if(threshold==50){
             threshold = 30;
         }
-        uLCD.printf(threshold"\n");
+        printf(threshold);
     }
-    else if(gesture_index == 1){
+    else if(gesture_index == 2){
         threshold=threshold-5;
         if(threshold==30){
             threshold = 50;
         }
-        uLCD.printf(threshold"\n");
+        printf(threshold);
     }
         return threshold;
-     sw1.rise(queue.event(mqtt_publish));
+  }
 }
+
+//---------------------------------------------------------------------------------------------------------------------------------------------------
+
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------
-void tilt_ang_det(){
+void tilt_ang_det(int threshold){
     count_theda();
     if (angel>threshold){
-    for(i=0;i<10;i++){
-      mqtt_publish();
-       }
+    for(int i=0;i<10;i++){
+      publish_message();
+      }
     }
 }
-
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-int main() {
-    //The mbed RPC classes are now wrapped to create an RPC enabled version - see RpcClasses.h so don't add to base class
 
-    // receive commands, and send back the responses
+int main() {
+  for(int i=0;i<10;i++){
+    printf("start1");
+  }
+   config.seq_length=64;
+
+   config.consecutiveInferenceThresholds[0]=25;
+   config.consecutiveInferenceThresholds[1]=10;
+   config.consecutiveInferenceThresholds[2]=20;
+
+   config.output_message[0]="right";
+   config.output_message[1]="left";
+   config.output_message[0]="left";
+  //  t.start(WIFI_FUNCTION);
+
+   BSP_ACCELERO_Init();
+
     char buf[256], outbuf[256];
 
     FILE *devin = fdopen(&pc, "r");
     FILE *devout = fdopen(&pc, "w");
 
+  sw1.rise(&publish_message);
+  printf("start");
     while(1) {
         memset(buf, 0, 256);
         for (int i = 0; ; i++) {
@@ -298,7 +397,7 @@ int main() {
             }
             buf[i] = fputc(recv, devout);
         }
-        //Call the static call method on the RPC class
+
         RPC::call(buf, outbuf);
         printf("%s\r\n", outbuf);
     }

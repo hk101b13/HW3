@@ -7,30 +7,13 @@
 struct Config {
 
   // This must be the same as seq_length in the src/model_train/config.py
-  const int seq_length = 64;
+  int seq_length;
 
   // The number of expected consecutive inferences for each gesture type.
-  const int consecutiveInferenceThresholds[label_num] = {10, 10,10};
+   int consecutiveInferenceThresholds[label_num];
 
-  const char* output_message[label_num] = {
-        "right:\n\r"
-        "          *       \n\r"
-        "            *     \n\r"
-        "              *   \n\r"
-        "    ******* \n\r"
-        "              *   \n\r"
-        "            *     \n\r"
-        "         *        \n\r",
-        "left:\n\r"
-        "          *     \n\r"
-        "       *        \n\r"
-        "    *           \n\r"
-        " ******* \n\r"
-        "    *           \n\r"
-        "       *        \n\r"
-        "          *     \n\r"
-        " * * * * * * * * \n\r"};
+char* output_message[label_num]; 
 };
+typedef struct  Config Config;
 
-Config config;
 #endif // CONFIG_H_
