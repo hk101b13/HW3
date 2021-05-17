@@ -1,12 +1,11 @@
 BUILD/B_L4S5I_IOT01A/GCC_ARM/accelerometer_handler.o: \
  accelerometer_handler.cpp BUILD/B_L4S5I_IOT01A/GCC_ARM/mbed_config.h \
- accelerometer_handler.h \
- src/model_deploy/tensorflowlite_mbed/tensorflow/lite/c/common.h \
- src/model_deploy/tensorflowlite_mbed/tensorflow/lite/micro/micro_error_reporter.h \
- src/model_deploy/tensorflowlite_mbed/tensorflow/lite/core/api/error_reporter.h \
- src/model_deploy/tensorflowlite_mbed/tensorflow/lite/micro/compatibility.h \
- src/model_deploy/tensorflowlite_mbed/tensorflow/lite/micro/debug_log.h \
- src/model_deploy/tensorflowlite_mbed/tensorflow/lite/micro/debug_log_numbers.h \
+ accelerometer_handler.h tensorflowlite_mbed/tensorflow/lite/c/common.h \
+ tensorflowlite_mbed/tensorflow/lite/micro/micro_error_reporter.h \
+ tensorflowlite_mbed/tensorflow/lite/core/api/error_reporter.h \
+ tensorflowlite_mbed/tensorflow/lite/micro/compatibility.h \
+ tensorflowlite_mbed/tensorflow/lite/micro/debug_log.h \
+ tensorflowlite_mbed/tensorflow/lite/micro/debug_log_numbers.h \
  /home/ee2405/ee2405/mbed-os/mbed.h \
  /home/ee2405/ee2405/mbed-os/platform/include/platform/mbed_version.h \
  /home/ee2405/ee2405/mbed-os/rtos/include/rtos/rtos.h \

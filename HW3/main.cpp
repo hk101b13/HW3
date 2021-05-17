@@ -1,6 +1,6 @@
 #include "mbed.h"
 #include "mbed_rpc.h"
-#include <math.h>
+#include "math.h"
 #include "uLCD_4DGL.h"
 
 #include "accelerometer_handler.h"
@@ -34,8 +34,6 @@ Thread mqtt_thread(osPriorityHigh);
 EventQueue mqtt_queue;
 
 BufferedSerial pc(USBTX, USBRX);
-void LEDControl(Arguments *in, Reply *out);
-
 DigitalOut led1(LED1);
 InterruptIn sw1(USER_BUTTON);
 EventQueue queue(32 * EVENTS_EVENT_SIZE);
@@ -300,8 +298,11 @@ int machine_learning(){
   error_reporter->Report("Set up successful...\n");
   while (true) {
 
-    // if(MODE == 1) return 0
-
+    if(sw1 == 1){
+      uLCD.printf("%d",threshold);
+      return 0;
+    } 
+    else{
     // Attempt to read new data from the accelerometer
     got_data = ReadAccelerometer(error_reporter, model_input->data.f,
                                  input_length, should_clear_buffer);
@@ -336,16 +337,17 @@ int machine_learning(){
         if(threshold==50){
             threshold = 30;
         }
-        printf(threshold);
+        //printf("%d\n",threshold);
     }
     else if(gesture_index == 2){
         threshold=threshold-5;
         if(threshold==30){
             threshold = 50;
         }
-        printf(threshold);
+        //printf("%d\n",threshold);
     }
         return threshold;
+    }
   }
 }
 

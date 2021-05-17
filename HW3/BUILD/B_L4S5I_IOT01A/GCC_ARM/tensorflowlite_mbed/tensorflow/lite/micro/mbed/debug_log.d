@@ -1,7 +1,7 @@
 BUILD/B_L4S5I_IOT01A/GCC_ARM/tensorflowlite_mbed/tensorflow/lite/micro/mbed/debug_log.o: \
  tensorflowlite_mbed/tensorflow/lite/micro/mbed/debug_log.cc \
  BUILD/B_L4S5I_IOT01A/GCC_ARM/mbed_config.h \
- src/model_deploy/tensorflowlite_mbed/tensorflow/lite/micro/debug_log.h \
+ tensorflowlite_mbed/tensorflow/lite/micro/debug_log.h \
  /home/ee2405/ee2405/mbed-os/mbed.h \
  /home/ee2405/ee2405/mbed-os/platform/include/platform/mbed_version.h \
  /home/ee2405/ee2405/mbed-os/rtos/include/rtos/rtos.h \
