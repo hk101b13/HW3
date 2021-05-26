@@ -16,4 +16,10 @@ print(line)
 line=s.readline() # Read an echo string from mbed terminated with '\n' (RPC reply)
 print(line)
 
+s.write(bytes("/gesture_UI/run\r", 'UTF-8'))
+line=s.readline() # Read an echo string from mbed terminated with '\n' (putc())
+print(line)
+line=s.readline() # Read an echo string from mbed terminated with '\n' (RPC reply)
+print(line)
+
 s.close()

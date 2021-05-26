@@ -46,6 +46,7 @@ double angel;
 double length_v;
 double length_g;
 double sum;
+char buff[100];
 // Whether we should clear the buffer next time we fetch data
 bool should_clear_buffer = false;
 bool got_data = false;
@@ -60,8 +61,8 @@ uint8_t tensor_arena[kTensorArenaSize];
 MQTT::Client<MQTTNetwork, Countdown> * client_out;
 int WIFI_FUNCTION();
 
-int machine_learning();
-void tilt_ang_det(int threshold);
+void machine_learning(Arguments *in, Reply *out);
+void tilt_ang_det(Arguments *in, Reply *out);
 RPCFunction rpcGesture(&machine_learning, "gesture_UI");
 RPCFunction rpcTilt(&tilt_ang_det, "tilt_angel");
 
@@ -92,7 +93,7 @@ int WIFI_FUNCTION(){
     MQTT::Client<MQTTNetwork, Countdown> client(mqttNetwork);
 
     //TODO: revise host to your IP
-    const char* host = "192.168.105.51";
+    const char* host = "192.168.242.51";
     printf("Connecting to TCP network...\r\n");
 
     SocketAddress sockAddr;
@@ -150,8 +151,6 @@ void publish_message(){
     led1=1;
     message_num++;
     MQTT::Message message;
-    char buff[100];
-    sprintf(buff, "%d", threshold);
     message.qos = MQTT::QOS0;
     message.retained = false;
     message.dup = false;
@@ -232,7 +231,7 @@ int PredictGesture(float* output) {
 
 
 //--------------------------------------------------------------------------------------------------------------------------------------------------------
-int machine_learning(){
+void machine_learning(Arguments *in, Reply *out){
 
   // Set up logging.
   static tflite::MicroErrorReporter micro_error_reporter;
@@ -246,7 +245,6 @@ int machine_learning(){
         "Model provided is schema version %d not equal "
         "to supported version %d.",
         model->version(), TFLITE_SCHEMA_VERSION);
-    return -1;
   }
 
   // Pull in only the operation implementations we need.
@@ -284,7 +282,6 @@ int machine_learning(){
       (model_input->dims->data[2] != kChannelNumber) ||
       (model_input->type != kTfLiteFloat32)) {
     error_reporter->Report("Bad input tensor parameters in model");
-    return -1;
   }
 
   int input_length = model_input->bytes / sizeof(float);
@@ -292,15 +289,15 @@ int machine_learning(){
   TfLiteStatus setup_status = SetupAccelerometer(error_reporter);
   if (setup_status != kTfLiteOk) {
     error_reporter->Report("Set up failed\n");
-    return -1;
   }
 
   error_reporter->Report("Set up successful...\n");
   while (true) {
 
     if(sw1 == 1){
+      sprintf(buff, "%d", threshold);
+      publish_message();
       uLCD.printf("%d",threshold);
-      return 0;
     } 
     else{
     // Attempt to read new data from the accelerometer
@@ -346,7 +343,6 @@ int machine_learning(){
         }
         //printf("%d\n",threshold);
     }
-        return threshold;
     }
   }
 }
@@ -355,10 +351,11 @@ int machine_learning(){
 
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------
-void tilt_ang_det(int threshold){
+void tilt_ang_det(Arguments *in, Reply *out){
     count_theda();
     if (angel>threshold){
     for(int i=0;i<10;i++){
+      sprintf(buff, "%f", angel);
       publish_message();
       }
     }
@@ -378,7 +375,7 @@ int main() {
    config.output_message[0]="right";
    config.output_message[1]="left";
    config.output_message[0]="left";
-  //  t.start(WIFI_FUNCTION);
+   t.start(WIFI_FUNCTION);
 
    BSP_ACCELERO_Init();
 
